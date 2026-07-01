@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RoastMySite
 
-## Getting Started
+Internal website audit and SaaS-roast tool. Enter a URL, get an investor-grade
+audit of design, branding, trust, and conversion performance — powered by
+Playwright scraping, Cheerio extraction, and an LLM via OpenRouter.
 
-First, run the development server:
+Single workflow, no marketing pages: enter URL → analyze → view report → export PDF.
+
+## Setup
 
 ```bash
+npm install
+cp .env.example .env.local   # add OPENROUTER_API_KEY
+npx playwright install chromium   # first time only, for local scraping
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Stack
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · shadcn/ui (Base UI) ·
+Framer Motion · Zustand · React Hook Form + Zod · Playwright/Cheerio ·
+OpenRouter · Recharts · @react-pdf/renderer
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Deployment (Vercel)
 
-## Learn More
+- Set `OPENROUTER_API_KEY` in Vercel project env vars.
+- The scraper auto-detects Vercel/Lambda (`VERCEL` env var) and switches from
+  the local `playwright` browser to `@sparticuz/chromium` + `playwright-core`,
+  which is what actually runs on serverless functions.
+- `/api/analyze` runs on the Node.js runtime with `maxDuration = 60`.
 
-To learn more about Next.js, take a look at the following resources:
+## Architecture
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `lib/scraper/` — browser launch (env-aware), page capture, Cheerio extraction
+- `lib/ai/` — OpenRouter client, prompt builder, Zod schema for structured output
+- `lib/store/` — Zustand stores (report history in localStorage, ephemeral analysis state)
+- `lib/types/audit.ts` — the report schema shared by scraper, AI, and UI
+- `app/api/analyze/route.ts` — SSE endpoint streaming pipeline stages + final report
+- `components/analyze/` — URL form, mode selector, loading screen, error view
+- `components/report/` — score radar/cards, audit sections, PDF export
+- `components/layout/` — top nav, theme toggle, report history panel
