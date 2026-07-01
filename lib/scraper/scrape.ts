@@ -32,8 +32,9 @@ export async function scrapeWebsite(rawUrl: string): Promise<ScrapedPageData> {
 
   try {
     browser = await launchBrowser();
-  } catch {
-    throw new ScrapeError("Couldn't start the analysis engine. Please try again.", "unknown");
+  } catch (err: any) {
+    const msg = err?.message || String(err);
+    throw new ScrapeError(`Couldn't start the analysis engine. Please try again. Error: ${msg}`, "unknown");
   }
 
   try {
