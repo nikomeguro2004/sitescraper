@@ -55,7 +55,7 @@ export function ReportView({ report, onNewAnalysis }: { report: AuditReport; onN
             </p>
             <button
               onClick={() => window.open("#", "_blank")}
-              className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-8 text-sm font-semibold text-primary-foreground shadow-xl shadow-primary/20 transition-transform hover:scale-105 gap-2"
+              className="mt-4 inline-flex h-12 cursor-pointer items-center justify-center rounded-full bg-foreground px-8 text-sm font-bold text-background shadow-xl transition-all hover:scale-105 hover:bg-foreground/90 gap-2"
             >
               Let&apos;s talk about your site
               <ArrowRight className="size-4" />
