@@ -62,6 +62,7 @@ export interface AuditReport {
   websiteName: string;
   url: string;
   screenshot: string;
+  themeColor: string | null;
   overallScore: number;
   scoreRating: ScoreRating;
   projectedImprovedScore: number;
@@ -86,6 +87,7 @@ export interface ScrapedPageData {
   metaDescription: string;
   siteName: string;
   screenshot: string;
+  themeColor: string | null;
   headings: { level: number; text: string }[];
   navLinks: string[];
   buttons: string[];
@@ -115,8 +117,9 @@ export const STAGE_LABELS = [
 export type StageIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export interface AnalyzeStreamEvent {
-  type: "stage" | "done" | "error";
+  type: "stage" | "scraped" | "done" | "error";
   stage?: StageIndex;
+  data?: ScrapedPageData;
   message?: string;
   report?: AuditReport;
 }

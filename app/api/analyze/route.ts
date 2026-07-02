@@ -9,6 +9,7 @@ export const maxDuration = 60;
 
 const requestSchema = z.object({
   url: z.string().url(),
+  scrapedData: z.any().optional(), // Using z.any() to pass through ScrapedPageData
 });
 
 function sseLine(event: AnalyzeStreamEvent): string {
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return new Response(JSON.stringify({ error: "Invalid request." }), { status: 400 });
   }
-  const { url } = parsed.data;
+  const { url, scrapedData } = parsed.data;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -30,9 +31,19 @@ export async function POST(req: NextRequest) {
       const stage = (i: StageIndex) => emit({ type: "stage", stage: i });
 
       try {
-        stage(0);
-        stage(1);
-        const scraped = await scrapeWebsite(url);
+        let scraped = scrapedData as import("@/lib/types/audit").ScrapedPageData | undefined;
+        
+        if (!scraped) {
+          stage(0);
+          stage(1);
+          scraped = await scrapeWebsite(url);
+          emit({ type: "scraped", data: scraped });
+        } else {
+          stage(0);
+          stage(1);
+          // Just a small delay so UI isn't instantaneous if we skip scraping
+          await new Promise(r => setTimeout(r, 500)); 
+        }
 
         stage(2);
 
@@ -42,15 +53,20 @@ export async function POST(req: NextRequest) {
 
         stage(7);
 
+        const catScores = Object.values(aiResult.categoryScores);
+        const avgScore = catScores.reduce((sum, s) => sum + s, 0) / catScores.length;
+        const calculatedOverallScore = Math.round(avgScore * 10) / 10; // Round to 1 decimal place
+
         const report: AuditReport = {
           id: crypto.randomUUID(),
           url: scraped.finalUrl,
           websiteName: aiResult.websiteName,
           screenshot: scraped.screenshot,
+          themeColor: scraped.themeColor,
           createdAt: new Date().toISOString(),
-          overallScore: Math.round(aiResult.overallScore),
+          overallScore: calculatedOverallScore,
           scoreRating: aiResult.scoreRating,
-          projectedImprovedScore: Math.round(aiResult.projectedImprovedScore),
+          projectedImprovedScore: Math.round(aiResult.projectedImprovedScore * 10) / 10,
           businessGrade: aiResult.businessGrade,
           categoryScores: aiResult.categoryScores,
           trustCredibility: aiResult.trustCredibility,

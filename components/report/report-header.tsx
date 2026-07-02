@@ -11,10 +11,9 @@ import { gradeColor } from "@/lib/utils/grade";
 
 export function ReportHeader({ report, onNewAnalysis }: { report: AuditReport; onNewAnalysis: () => void }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/40">
-      <div className="relative h-56 w-full border-b border-border/60 bg-muted sm:h-72">
+    <div className="overflow-hidden rounded-3xl border border-border/40 bg-card/80 backdrop-blur-md shadow-sm">
+      <div className="relative h-72 w-full border-b border-border/40 bg-muted/50 sm:h-96">
         <Image src={report.screenshot} alt={report.websiteName} fill className="object-cover object-top" unoptimized priority />
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
       </div>
 
       <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-center sm:justify-between">

@@ -27,7 +27,7 @@ export default function RootLayout({
   return (
       <html
         lang="en"
-        className={`${fontSans.variable} ${fontHeading.variable} h-full antialiased dark`}
+        className={`${fontSans.variable} ${fontHeading.variable} h-full antialiased light`}
       >
         <body className="min-h-full flex flex-col font-sans">
           <TooltipProvider delay={200}>

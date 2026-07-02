@@ -3,11 +3,13 @@
 import { motion } from "framer-motion";
 import { scoreColor } from "@/lib/utils/grade";
 
-export function ScoreRing({ score, size = 140 }: { score: number; size?: number }) {
+export function ScoreRing({ score: rawScore, size = 140 }: { score: number; size?: number }) {
+  const score = rawScore > 10 ? rawScore / 10 : rawScore;
   const stroke = 10;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference * (1 - score / 10);
+  const colorClass = scoreColor(score);
 
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
@@ -22,14 +24,14 @@ export function ScoreRing({ score, size = 140 }: { score: number; size?: number 
           fill="none"
           strokeLinecap="round"
           strokeDasharray={circumference}
-          className={scoreColor(score)}
+          className={colorClass}
           initial={{ strokeDashoffset: circumference }}
           animate={{ strokeDashoffset: offset }}
           transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className={`text-3xl font-bold tabular-nums ${scoreColor(score)}`}>{score}</span>
+        <span className={`text-3xl font-bold tabular-nums ${colorClass}`}>{score}</span>
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground">/ 10</span>
       </div>
     </div>

@@ -16,8 +16,9 @@ export function extractPageData(html: string, url: string, finalUrl: string, scr
     "";
   const siteName =
     $('meta[property="og:site_name"]').attr("content")?.trim() ||
-    $('meta[name="application-name"]').attr("content")?.trim() ||
+    $('meta[property="application-name"]').attr("content")?.trim() ||
     "";
+  const themeColor = $('meta[name="theme-color"]').attr("content") || null;
 
   const headings: { level: number; text: string }[] = [];
   $("h1, h2, h3").each((_, el) => {
@@ -86,6 +87,7 @@ export function extractPageData(html: string, url: string, finalUrl: string, scr
     metaDescription: metaDescription.slice(0, 300),
     siteName: siteName.slice(0, 120),
     screenshot,
+    themeColor,
     headings: headings.slice(0, 40),
     navLinks: [...new Set(navLinks)].slice(0, 20),
     buttons: [...new Set(buttons)].slice(0, 20),

@@ -51,19 +51,19 @@ export default function Home() {
               transition={{ duration: 0.5, ease: "easeOut" }}
               className="flex w-full flex-1 flex-col items-center justify-center gap-12 py-12 relative z-10"
             >
-              <div className="absolute inset-0 -z-10 flex items-center justify-center pointer-events-none opacity-30 dark:opacity-20 blur-[100px]">
+              <div className="absolute inset-0 -z-10 flex items-center justify-center pointer-events-none opacity-20 blur-[120px]">
                 <motion.div 
                   animate={{ scale: [1, 1.1, 1], rotate: [0, 90, 0] }} 
                   transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-                  className="w-[600px] h-[600px] bg-primary/40 rounded-full" 
+                  className="w-[600px] h-[600px] bg-primary/40 rounded-full mix-blend-multiply" 
                 />
               </div>
-              <div className="flex flex-col items-center gap-6 text-center">
+              <div className="flex flex-col items-center gap-6 text-center mt-12">
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: 0.1, duration: 0.4 }}
-                  className="px-3 py-1 text-xs font-medium tracking-widest uppercase rounded-full bg-primary/10 text-primary border border-primary/20"
+                  className="px-4 py-1.5 text-xs font-semibold tracking-widest uppercase rounded-full bg-primary/10 text-primary border border-primary/20"
                 >
                   AI-Powered Website Audit
                 </motion.div>
@@ -79,7 +79,7 @@ export default function Home() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3, duration: 0.4 }}
-                  className="max-w-xl text-balance text-muted-foreground sm:text-xl"
+                  className="max-w-xl text-balance text-muted-foreground sm:text-xl leading-relaxed mt-4"
                 >
                   Get an investor-level review of your website&apos;s design, branding, trust signals, and conversion flow in seconds.
                 </motion.p>

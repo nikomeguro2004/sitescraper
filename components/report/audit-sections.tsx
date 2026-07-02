@@ -30,7 +30,7 @@ function SectionCard({ title, section, delay }: { title: string; section: Parame
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay, ease: "easeOut" }}
-      className="flex flex-col gap-4 rounded-2xl border border-border/40 bg-card/40 p-6 shadow-sm backdrop-blur-sm"
+      className="flex flex-col gap-5 rounded-3xl border border-border/40 bg-card/60 p-8 shadow-sm backdrop-blur-md break-inside-avoid mb-8 hover:-translate-y-1 hover:shadow-md hover:bg-card/80 transition-all duration-300"
     >
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold tracking-tight">{title}</h3>
@@ -43,14 +43,14 @@ function SectionCard({ title, section, delay }: { title: string; section: Parame
       <div className="flex flex-col gap-4">
         <ul className="flex flex-col gap-3">
           {section.points.map((p, i) => (
-            <li key={i} className="flex gap-3 text-sm/relaxed">
-              <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary/40 shadow-[0_0_8px_rgba(var(--primary),0.5)]" />
+            <li key={i} className="flex gap-4 text-base leading-relaxed">
+              <span className="mt-2 size-2 shrink-0 rounded-full bg-primary/60 shadow-[0_0_8px_rgba(var(--primary),0.5)]" />
               <span className="text-foreground/90">{p}</span>
             </li>
           ))}
         </ul>
-        <div className="rounded-xl bg-background/50 border border-border/50 p-4 mt-2">
-          <p className="text-sm/relaxed text-muted-foreground"><span className="font-semibold text-foreground">Conclusion:</span> {section.conclusion}</p>
+        <div className="rounded-2xl bg-primary/5 border border-primary/10 p-5 mt-2">
+          <p className="text-base leading-relaxed text-muted-foreground"><span className="font-semibold text-foreground">Conclusion:</span> {section.conclusion}</p>
         </div>
       </div>
     </motion.div>
@@ -73,7 +73,7 @@ export function AuditSections({ report }: { report: AuditReport }) {
       {/* Parameters Summary Table */}
       <motion.div 
         initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
-        className="rounded-2xl border border-border/40 bg-card/40 p-6 shadow-sm backdrop-blur-sm overflow-hidden"
+        className="rounded-3xl border border-border/40 bg-card/60 p-8 shadow-sm backdrop-blur-md overflow-hidden"
       >
         <h3 className="text-lg font-semibold tracking-tight mb-4">7 Core Business Parameters</h3>
         <div className="overflow-x-auto">
@@ -100,38 +100,38 @@ export function AuditSections({ report }: { report: AuditReport }) {
         </div>
       </motion.div>
 
-      <div className="flex flex-col gap-6">
+      <div className="columns-1 lg:columns-2 gap-8">
         {parameters.map((section, index) => (
           <SectionCard key={section.key} title={section.label} delay={0.2 + (index * 0.1)} section={section.data} />
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1 }} className="flex flex-col overflow-hidden rounded-2xl border border-destructive/20 bg-destructive/5 shadow-sm">
-          <div className="bg-destructive/10 px-6 py-4 border-b border-destructive/10 flex items-center gap-3">
-            <XCircle className="size-5 text-destructive" />
-            <h3 className="text-lg font-bold tracking-tight text-destructive">What Is Broken (Problems)</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1 }} className="flex flex-col overflow-hidden rounded-3xl border border-destructive/20 bg-destructive/5 shadow-sm">
+          <div className="bg-destructive/10 px-8 py-6 border-b border-destructive/10 flex items-center gap-3">
+            <XCircle className="size-6 text-destructive" />
+            <h3 className="text-xl font-bold tracking-tight text-destructive">What Is Broken (Problems)</h3>
           </div>
           <ul className="flex flex-col gap-4 p-6">
             {report.whatWeDo.problems.map((p, i) => (
-              <li key={i} className="flex gap-3 text-sm/relaxed">
-                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-destructive/60" />
+              <li key={i} className="flex gap-4 text-base leading-relaxed">
+                <span className="mt-2 size-2 shrink-0 rounded-full bg-destructive/60" />
                 <span className="text-foreground/90 font-medium">{p}</span>
               </li>
             ))}
           </ul>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.1 }} className="flex flex-col overflow-hidden rounded-2xl border border-primary/20 bg-primary/5 shadow-sm relative">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.1 }} className="flex flex-col overflow-hidden rounded-3xl border border-primary/20 bg-primary/5 shadow-sm relative">
           <div className="absolute top-0 right-0 p-32 bg-primary/10 blur-[100px] rounded-full pointer-events-none" />
-          <div className="bg-primary/10 px-6 py-4 border-b border-primary/10 flex items-center gap-3 relative z-10">
-            <CheckCircle2 className="size-5 text-primary" />
-            <h3 className="text-lg font-bold tracking-tight text-primary">What We Do (Solutions)</h3>
+          <div className="bg-primary/10 px-8 py-6 border-b border-primary/10 flex items-center gap-3 relative z-10">
+            <CheckCircle2 className="size-6 text-primary" />
+            <h3 className="text-xl font-bold tracking-tight text-primary">What We Do (Solutions)</h3>
           </div>
           <ul className="flex flex-col gap-4 p-6 relative z-10">
             {report.whatWeDo.solutions.map((p, i) => (
-              <li key={i} className="flex gap-3 text-sm/relaxed">
-                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary/60" />
+              <li key={i} className="flex gap-4 text-base leading-relaxed">
+                <span className="mt-2 size-2 shrink-0 rounded-full bg-primary/60" />
                 <span className="text-foreground/90 font-medium">{p}</span>
               </li>
             ))}
@@ -139,18 +139,18 @@ export function AuditSections({ report }: { report: AuditReport }) {
         </motion.div>
       </div>
 
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2 }} className="flex flex-col gap-8 rounded-3xl border border-border/60 bg-card p-6 sm:p-10 shadow-lg mt-8 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-50" />
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 border-b border-border/50 pb-8 relative z-10">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2 }} className="flex flex-col gap-10 rounded-3xl border border-border/50 bg-card/80 p-8 sm:p-12 shadow-xl mt-12 relative overflow-hidden backdrop-blur-md">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-60" />
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-10 border-b border-border/50 pb-10 relative z-10">
           <div>
-            <h3 className="text-3xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">Final Verdict</h3>
-            <p className="text-muted-foreground mt-2 font-medium">Based on investor-grade analysis</p>
+            <h3 className="text-4xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">Final Verdict</h3>
+            <p className="text-muted-foreground mt-3 text-lg font-medium">Based on investor-grade analysis</p>
           </div>
           <div className="flex items-center gap-8 md:gap-12">
             <div className="flex flex-col items-center">
               <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2 font-semibold">Current Score</p>
               <div className="flex items-center gap-3">
-                <span className="text-4xl sm:text-5xl font-black tabular-nums">{report.overallScore}</span>
+                <span className="text-4xl sm:text-5xl font-black tabular-nums">{report.overallScore > 10 ? report.overallScore / 10 : report.overallScore}</span>
                 <Badge variant="outline" className="bg-background text-xs px-2 py-1">{report.scoreRating}</Badge>
               </div>
             </div>
@@ -160,35 +160,35 @@ export function AuditSections({ report }: { report: AuditReport }) {
                 <TrendingUp className="size-3.5" />
                 Projected Potential
               </p>
-              <span className="text-4xl sm:text-5xl font-black tabular-nums text-primary">{report.projectedImprovedScore}</span>
+              <span className="text-4xl sm:text-5xl font-black tabular-nums text-primary">{report.projectedImprovedScore > 10 ? report.projectedImprovedScore / 10 : report.projectedImprovedScore}</span>
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 relative z-10">
           <div className="flex flex-col gap-5">
-            <h4 className="text-lg font-bold">Business Conclusion</h4>
-            <ul className="flex flex-col gap-4 bg-muted/30 p-5 rounded-2xl border border-border/40">
+            <h4 className="text-2xl font-bold tracking-tight">Business Conclusion</h4>
+            <ul className="flex flex-col gap-5 bg-muted/40 p-8 rounded-3xl border border-border/40 shadow-sm mt-2">
               {report.businessConclusion.points.map((p, i) => (
-                <li key={i} className="flex gap-3 text-sm/relaxed">
-                  <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary/50" />
+                <li key={i} className="flex gap-4 text-base leading-relaxed">
+                  <span className="mt-2.5 size-2 shrink-0 rounded-full bg-primary/50" />
                   <span className="text-foreground/90 font-medium">{p}</span>
                 </li>
               ))}
             </ul>
           </div>
-          <div className="flex flex-col gap-5 justify-center">
-            <div className="rounded-2xl bg-background/50 border border-border/50 p-6 shadow-sm">
-              <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3 font-bold flex items-center gap-2">
-                <AlertTriangle className="size-4 text-amber-500" />
+          <div className="flex flex-col gap-6 justify-center">
+            <div className="rounded-3xl bg-background/60 border border-border/50 p-8 shadow-md backdrop-blur-sm">
+              <p className="text-sm uppercase tracking-widest text-muted-foreground mb-4 font-bold flex items-center gap-2">
+                <AlertTriangle className="size-5 text-amber-500" />
                 Currently behaves like
               </p>
-              <p className="text-base font-medium italic text-foreground/80 leading-relaxed">&quot;{report.businessConclusion.currentPositioning}&quot;</p>
+              <p className="text-lg font-medium italic text-foreground/80 leading-relaxed">&quot;{report.businessConclusion.currentPositioning}&quot;</p>
             </div>
-            <div className="rounded-2xl bg-primary/10 border border-primary/20 p-6 shadow-md relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent" />
-              <p className="text-xs uppercase tracking-widest text-primary mb-3 font-bold relative z-10 flex items-center gap-2">
-                <CheckCircle2 className="size-4" />
+            <div className="rounded-3xl bg-primary/10 border border-primary/20 p-8 shadow-lg relative overflow-hidden backdrop-blur-sm">
+              <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent" />
+              <p className="text-sm uppercase tracking-widest text-primary mb-4 font-bold relative z-10 flex items-center gap-2">
+                <CheckCircle2 className="size-5" />
                 Future Positioning
               </p>
               <p className="text-base sm:text-lg font-semibold italic text-foreground relative z-10 leading-relaxed">&quot;{report.businessConclusion.premiumFuturePositioning}&quot;</p>

@@ -21,22 +21,24 @@ export function ScoreRadar({ scores }: { scores: Record<ScoreCategory, number> }
   }));
 
   return (
-    <div className="h-[320px] w-full">
+    <div className="h-[480px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <RadarChart data={data} outerRadius="72%">
-          <PolarGrid stroke="var(--border)" />
+        <RadarChart data={data} outerRadius="75%" margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
+          <PolarGrid stroke="var(--border)" strokeOpacity={0.6} />
           <PolarAngleAxis
             dataKey="category"
-            tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+            tick={{ fill: "var(--foreground)", fontSize: 13, fontWeight: 500 }}
             className="select-none"
           />
           <PolarRadiusAxis domain={[0, 10]} tick={false} axisLine={false} tickCount={5} />
           <Radar
             dataKey="score"
-            stroke="var(--foreground)"
-            fill="var(--foreground)"
-            fillOpacity={0.18}
-            strokeWidth={2}
+            stroke="var(--primary)"
+            fill="var(--primary)"
+            fillOpacity={0.25}
+            strokeWidth={3}
+            dot={{ r: 4, fill: "var(--primary)", strokeWidth: 0 }}
+            activeDot={{ r: 6, fill: "var(--primary)", strokeWidth: 0 }}
           />
         </RadarChart>
       </ResponsiveContainer>
