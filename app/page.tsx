@@ -9,7 +9,6 @@ import { ReportView } from "@/components/report/report-view";
 import { useAnalysisStore } from "@/lib/store/analysis-store";
 import { useReportsStore } from "@/lib/store/reports-store";
 import { runAnalysis } from "@/lib/utils/analyze-client";
-import { type AuditReport } from "@/lib/types/audit";
 
 export default function Home() {
   const { view, stage, url, report, error, start, setStage, finish, fail, reset } = useAnalysisStore();

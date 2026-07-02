@@ -183,7 +183,7 @@ export function AuditSections({ report }: { report: AuditReport }) {
                 <AlertTriangle className="size-4 text-amber-500" />
                 Currently behaves like
               </p>
-              <p className="text-base font-medium italic text-foreground/80 leading-relaxed">"{report.businessConclusion.currentPositioning}"</p>
+              <p className="text-base font-medium italic text-foreground/80 leading-relaxed">&quot;{report.businessConclusion.currentPositioning}&quot;</p>
             </div>
             <div className="rounded-2xl bg-primary/10 border border-primary/20 p-6 shadow-md relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent" />
@@ -191,7 +191,7 @@ export function AuditSections({ report }: { report: AuditReport }) {
                 <CheckCircle2 className="size-4" />
                 Future Positioning
               </p>
-              <p className="text-base sm:text-lg font-semibold italic text-foreground relative z-10 leading-relaxed">"{report.businessConclusion.premiumFuturePositioning}"</p>
+              <p className="text-base sm:text-lg font-semibold italic text-foreground relative z-10 leading-relaxed">&quot;{report.businessConclusion.premiumFuturePositioning}&quot;</p>
             </div>
           </div>
         </div>

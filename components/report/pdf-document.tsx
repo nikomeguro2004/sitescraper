@@ -136,9 +136,9 @@ export function AuditPdfDocument({ report }: { report: AuditReport }) {
         ))}
         <View style={styles.conclusionBox}>
           <Text style={styles.h3}>Currently Behaves Like</Text>
-          <Text style={styles.paragraph}>"{report.businessConclusion.currentPositioning}"</Text>
+          <Text style={styles.paragraph}>&quot;{report.businessConclusion.currentPositioning}&quot;</Text>
           <Text style={styles.h3}>Future Positioning</Text>
-          <Text style={styles.paragraph}>"{report.businessConclusion.premiumFuturePositioning}"</Text>
+          <Text style={styles.paragraph}>&quot;{report.businessConclusion.premiumFuturePositioning}&quot;</Text>
         </View>
 
         <View style={styles.footer} fixed>

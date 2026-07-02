@@ -96,7 +96,7 @@ export function extractPageData(html: string, url: string, finalUrl: string, scr
     hasTestimonials,
     testimonialText: [],
     heroText,
-    wordCount: mainText.split(/\s+/).filter((w) => w.length > 0).length,
+    wordCount,
     techClues: [...new Set(techClues.filter(Boolean))].slice(0, 30),
     content: mainText,
   };
