@@ -2,14 +2,72 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { scrapeWebsite, ScrapeError } from "@/lib/scraper/scrape";
 import { generateAudit, OpenRouterError } from "@/lib/ai/openrouter";
-import { type AnalyzeStreamEvent, type AuditReport, type StageIndex } from "@/lib/types/audit";
+import { SCORE_CATEGORIES, type AnalyzeStreamEvent, type AuditReport, type StageIndex } from "@/lib/types/audit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+const subPageSchema = z.object({
+  url: z.string(),
+  path: z.string(),
+  title: z.string(),
+  headings: z.array(z.object({ level: z.number(), text: z.string() })),
+  buttons: z.array(z.string()),
+  formsCount: z.number(),
+  hasPricingSection: z.boolean(),
+  pricingText: z.array(z.string()),
+  hasTestimonials: z.boolean(),
+  testimonialText: z.array(z.string()),
+  content: z.string(),
+  wordCount: z.number(),
+});
+
+const scrapedDataSchema = z.object({
+  url: z.string(),
+  finalUrl: z.string(),
+  title: z.string(),
+  metaDescription: z.string(),
+  siteName: z.string(),
+  screenshot: z.string(),
+  themeColor: z.string().nullable(),
+  headings: z.array(z.object({ level: z.number(), text: z.string() })),
+  navLinks: z.array(z.string()),
+  buttons: z.array(z.string()),
+  formsCount: z.number(),
+  content: z.string(),
+  formFields: z.array(z.string()),
+  hasPricingSection: z.boolean(),
+  pricingText: z.array(z.string()),
+  hasTestimonials: z.boolean(),
+  testimonialText: z.array(z.string()),
+  heroText: z.string(),
+  wordCount: z.number(),
+  techStack: z.array(z.string()),
+  subPages: z.array(subPageSchema).default([]),
+  signals: z.object({
+    emails: z.array(z.string()),
+    phones: z.array(z.string()),
+    socialLinks: z.array(z.string()),
+    hasPrivacyPolicy: z.boolean(),
+    hasTermsOfService: z.boolean(),
+    copyrightYear: z.string().nullable(),
+    hasFavicon: z.boolean(),
+    hasOgImage: z.boolean(),
+    hasCanonical: z.boolean(),
+    hasViewportMeta: z.boolean().default(true),
+    titleLength: z.number(),
+    metaDescriptionLength: z.number(),
+    h1Count: z.number(),
+    imgCount: z.number(),
+    imgMissingAlt: z.number(),
+    complianceMentions: z.array(z.string()),
+  }),
+  viewportScreenshot: z.string().default(""),
+});
+
 const requestSchema = z.object({
   url: z.string().url(),
-  scrapedData: z.any().optional(), // Using z.any() to pass through ScrapedPageData
+  scrapedData: scrapedDataSchema.optional(),
 });
 
 function sseLine(event: AnalyzeStreamEvent): string {
@@ -31,8 +89,8 @@ export async function POST(req: NextRequest) {
       const stage = (i: StageIndex) => emit({ type: "stage", stage: i });
 
       try {
-        let scraped = scrapedData as import("@/lib/types/audit").ScrapedPageData | undefined;
-        
+        let scraped = scrapedData;
+
         if (!scraped) {
           stage(0);
           stage(1);
@@ -53,9 +111,16 @@ export async function POST(req: NextRequest) {
 
         stage(7);
 
-        const catScores = Object.values(aiResult.categoryScores);
-        const avgScore = catScores.reduce((sum, s) => sum + s, 0) / catScores.length;
-        const calculatedOverallScore = Math.round(avgScore * 10) / 10; // Round to 1 decimal place
+        // Single source of truth: the per-section scores. categoryScores, the
+        // overall score, grade, and rating are all derived from them so the
+        // report can never contradict itself.
+        const categoryScores = Object.fromEntries(
+          SCORE_CATEGORIES.map((key) => [key, Math.round(aiResult[key].score * 10) / 10]),
+        ) as Record<(typeof SCORE_CATEGORIES)[number], number>;
+        const avgScore = SCORE_CATEGORIES.reduce((sum, key) => sum + categoryScores[key], 0) / SCORE_CATEGORIES.length;
+        const overallScore = Math.round(avgScore * 10) / 10;
+        const projectedImprovedScore =
+          Math.round(Math.min(9.7, Math.max(aiResult.projectedImprovedScore, overallScore + 0.3)) * 10) / 10;
 
         const report: AuditReport = {
           id: crypto.randomUUID(),
@@ -64,11 +129,11 @@ export async function POST(req: NextRequest) {
           screenshot: scraped.screenshot,
           themeColor: scraped.themeColor,
           createdAt: new Date().toISOString(),
-          overallScore: calculatedOverallScore,
-          scoreRating: aiResult.scoreRating,
-          projectedImprovedScore: Math.round(aiResult.projectedImprovedScore * 10) / 10,
-          businessGrade: aiResult.businessGrade,
-          categoryScores: aiResult.categoryScores,
+          overallScore,
+          scoreRating: deriveScoreRating(overallScore),
+          projectedImprovedScore,
+          businessGrade: deriveBusinessGrade(overallScore),
+          categoryScores,
           trustCredibility: aiResult.trustCredibility,
           salesConversionReadiness: aiResult.salesConversionReadiness,
           enterpriseReadiness: aiResult.enterpriseReadiness,
@@ -116,6 +181,24 @@ async function raceStagesWithWork(
     await Promise.race([new Promise((r) => setTimeout(r, intervalMs)), work.catch(() => {})]);
     if (settled) return;
   }
+}
+
+function deriveBusinessGrade(score: number): AuditReport["businessGrade"] {
+  if (score >= 9) return "A+";
+  if (score >= 8.5) return "A";
+  if (score >= 7.5) return "B+";
+  if (score >= 6.5) return "B";
+  if (score >= 5.5) return "C+";
+  if (score >= 4.5) return "C";
+  if (score >= 3.5) return "D";
+  return "F";
+}
+
+function deriveScoreRating(score: number): AuditReport["scoreRating"] {
+  if (score >= 8.5) return "EXCELLENT";
+  if (score >= 7) return "GOOD";
+  if (score >= 5) return "MEDIUM";
+  return "LOW";
 }
 
 function errorMessage(err: unknown): string {

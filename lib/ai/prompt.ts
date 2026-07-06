@@ -1,5 +1,4 @@
 import type { ScrapedPageData } from "@/lib/types/audit";
-import { AI_JSON_SCHEMA } from "./schema";
 
 export function buildSystemPrompt(): string {
   return `You are a Senior Website Growth Consultant, UI/UX Strategist, CRO Expert, SaaS Branding Expert and Business Conversion Auditor. Your task is to perform an encouraging, highly constructive, premium-level WEBSITE BUSINESS AUDIT for the provided website data. 
@@ -67,11 +66,50 @@ IMPORTANT AUDIT RULES:
 9. Do NOT use emojis.
 10. Be highly observant and analytical.
 11. Use industry comparison mentally while scoring.
+12. You receive the homepage PLUS several crawled internal pages (pricing, about, product, customers, etc.). Ground your claims in this multi-page evidence — e.g. judge pricing transparency from the actual pricing page, social proof from the customers page — and reference specific pages (by path) in your points when relevant.
+13. The FACTUAL SITE SIGNALS block is deterministically extracted ground truth. Never contradict it — do not claim contact info, legal pages, or compliance badges are missing when the signals say they exist, and never invent ones the signals do not show. Cite these facts in your points.
+14. Base all visual/design claims (color, typography, layout, hierarchy, imagery) on the VISUAL ANALYSIS block, which comes from a vision model that saw the actual rendered page. If that block is unavailable, do not make specific claims about colors or typography you cannot infer from the text content.
 
 Output ONLY valid JSON matching the schema. No markdown, no code fences, no commentary outside the JSON object.`;
 }
 
-export function buildUserPrompt(data: ScrapedPageData): string {
+function renderSubPage(page: ScrapedPageData["subPages"][number], index: number): string {
+  return `--- PAGE ${index + 2}: ${page.path} (${page.title || "untitled"}) ---
+Headings: ${page.headings.map((h) => `H${h.level}: ${h.text}`).join(" | ") || "(none)"}
+Buttons / CTAs: ${page.buttons.join(", ") || "(none)"}
+Forms: ${page.formsCount}
+Pricing present: ${page.hasPricingSection ? "yes" : "no"}${page.pricingText.length ? ` — excerpts: ${page.pricingText.join(" | ")}` : ""}
+Testimonials present: ${page.hasTestimonials ? "yes" : "no"}${page.testimonialText.length ? ` — excerpts: ${page.testimonialText.join(" | ")}` : ""}
+Content: ${page.content || "(empty)"}`;
+}
+
+function renderSignals(s: ScrapedPageData["signals"]): string {
+  return `Contact emails found: ${s.emails.length ? s.emails.join(", ") : "NONE"}
+Phone numbers found: ${s.phones.length ? s.phones.join(", ") : "NONE"}
+Social profiles linked: ${s.socialLinks.length ? s.socialLinks.join(", ") : "NONE"}
+Privacy policy linked: ${s.hasPrivacyPolicy ? "yes" : "NO"} · Terms of service linked: ${s.hasTermsOfService ? "yes" : "NO"}
+Compliance/security mentions: ${s.complianceMentions.length ? s.complianceMentions.join(", ") : "none found"}
+Copyright year shown: ${s.copyrightYear ?? "none found"}
+SEO/meta: title ${s.titleLength} chars · meta description ${s.metaDescriptionLength ? `${s.metaDescriptionLength} chars` : "MISSING"} · canonical ${s.hasCanonical ? "yes" : "no"} · og:image ${s.hasOgImage ? "yes" : "no"} · favicon ${s.hasFavicon ? "yes" : "no"} · responsive viewport meta ${s.hasViewportMeta ? "yes" : "NO (site likely not mobile-optimized)"}
+Structure: ${s.h1Count} H1 tag(s) · ${s.imgCount} images (${s.imgMissingAlt} missing alt text)`;
+}
+
+export function buildUserPrompt(data: ScrapedPageData, visualAnalysis?: string | null): string {
+  const visualBlock = visualAnalysis
+    ? `\n=== VISUAL ANALYSIS OF RENDERED HOMEPAGE (from a vision model that saw the actual screenshot) ===
+${visualAnalysis}
+=========================\n`
+    : `\n(Visual analysis unavailable for this run — avoid specific claims about colors/typography/imagery you cannot infer from the text.)\n`;
+
+  const subPagesBlock =
+    data.subPages.length > 0
+      ? `\n=== ADDITIONAL CRAWLED PAGES (${data.subPages.length}) ===
+The crawler also visited these key internal pages. Use them to ground claims about pricing transparency, social proof, enterprise readiness, and conversion paths — do not judge those solely from the homepage.
+
+${data.subPages.map(renderSubPage).join("\n\n")}
+=========================\n`
+      : `\n(No additional internal pages could be crawled — base the audit on the homepage only, and note in the audit when a claim would need pricing/about/customer pages to verify.)\n`;
+
   return `Analyze this website using the scraped data below and return the structured JSON audit.
 
 URL: ${data.finalUrl}
@@ -80,16 +118,18 @@ og:site_name meta tag: ${data.siteName || "(not present)"}
 Meta description: ${data.metaDescription || "(none found)"}
 Word count: ${data.wordCount}
 
-=== EXTRACTED CONTENT ===
-${data.content.substring(0, 35000)}
+=== FACTUAL SITE SIGNALS (deterministically extracted — ground truth, cite these) ===
+${renderSignals(data.signals)}
 =========================
+${visualBlock}
+=== PAGE 1: HOMEPAGE CONTENT ===
+${data.content}
+=========================
+${subPagesBlock}
 
-=== TECH CLUES ===
-${data.techClues.join(", ") || "(none found)"}
+=== DETECTED TECH STACK ===
+${data.techStack.join(", ") || "(no recognizable platform/tooling signatures found — likely a custom-built site)"}
 ==================
-
-Output the JSON payload matching the AI_JSON_SCHEMA strictly. Use the provided JSON schema definitions implicitly:
-${JSON.stringify(AI_JSON_SCHEMA, null, 2)}
 
 For "websiteName" in your JSON output, use the actual brand/company name (e.g. from og:site_name, or inferred from the page title/hero — strip suffixes like taglines or "| Home"). Never output the raw URL or domain as the websiteName.
 

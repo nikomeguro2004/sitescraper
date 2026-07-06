@@ -80,6 +80,41 @@ export interface AuditReport {
   createdAt: string;
 }
 
+/** Deterministically extracted facts — ground truth the AI must not contradict. */
+export interface SiteSignals {
+  emails: string[];
+  phones: string[];
+  socialLinks: string[];
+  hasPrivacyPolicy: boolean;
+  hasTermsOfService: boolean;
+  copyrightYear: string | null;
+  hasFavicon: boolean;
+  hasOgImage: boolean;
+  hasCanonical: boolean;
+  hasViewportMeta: boolean;
+  titleLength: number;
+  metaDescriptionLength: number;
+  h1Count: number;
+  imgCount: number;
+  imgMissingAlt: number;
+  complianceMentions: string[];
+}
+
+export interface SubPageData {
+  url: string;
+  path: string;
+  title: string;
+  headings: { level: number; text: string }[];
+  buttons: string[];
+  formsCount: number;
+  hasPricingSection: boolean;
+  pricingText: string[];
+  hasTestimonials: boolean;
+  testimonialText: string[];
+  content: string;
+  wordCount: number;
+}
+
 export interface ScrapedPageData {
   url: string;
   finalUrl: string;
@@ -100,7 +135,11 @@ export interface ScrapedPageData {
   testimonialText: string[];
   heroText: string;
   wordCount: number;
-  techClues: string[];
+  techStack: string[];
+  subPages: SubPageData[];
+  signals: SiteSignals;
+  /** Above-the-fold screenshot for the vision pass (smaller than the full-page shot). */
+  viewportScreenshot: string;
 }
 
 export const STAGE_LABELS = [

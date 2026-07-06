@@ -12,19 +12,43 @@ export class OpenRouterError extends Error {
   }
 }
 
-const DEFAULT_MODELS = [
-  "llama-3.3-70b-versatile",
-  "llama-3.1-8b-instant",
-];
+type Provider = "groq" | "openrouter";
 
-function candidateModels(): string[] {
-  const configured = process.env.GROQ_MODEL;
-  if (!configured) return DEFAULT_MODELS;
-  const list = configured
-    .split(",")
-    .map((m) => m.trim())
-    .filter(Boolean);
-  return list.length ? list : DEFAULT_MODELS;
+interface Attempt {
+  provider: Provider;
+  key: string;
+  model: string;
+}
+
+// Free-tier Groq TPM limits: llama-3.3-70b 12k (fits our ~9k-token prompt),
+// gpt-oss-120b 8k and llama-3.1-8b 6k (only fit small sites) — order matters.
+const GROQ_MODELS = ["llama-3.3-70b-versatile", "openai/gpt-oss-120b", "llama-3.1-8b-instant"];
+const GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+const OPENROUTER_MODELS = ["meta-llama/llama-3.3-70b-instruct:free", "openai/gpt-oss-120b:free"];
+
+// Total wall-clock budget for the AI stage. Kept well under the route's
+// maxDuration (60s) so a clean SSE error can still be emitted instead of the
+// serverless function being killed mid-stream.
+const AI_BUDGET_MS = 40_000;
+const PER_CALL_TIMEOUT_MS = 18_000;
+
+function buildAttempts(): Attempt[] {
+  const groqModels = (process.env.GROQ_MODEL?.split(",").map((m) => m.trim()).filter(Boolean)) || GROQ_MODELS;
+  const orModels =
+    (process.env.OPENROUTER_MODEL?.split(",").map((m) => m.trim()).filter(Boolean)) || OPENROUTER_MODELS;
+
+  const attempts: Attempt[] = [];
+  const groqKeys = [process.env.GROQ_API_KEY_2, process.env.GROQ_API_KEY].filter((k): k is string => !!k);
+  const orKey = process.env.OPENROUTER_API_KEY;
+
+  // Groq first (faster + generous free tier), then OpenRouter as fallback.
+  for (const key of groqKeys) {
+    for (const model of groqModels) attempts.push({ provider: "groq", key, model });
+  }
+  if (orKey) {
+    for (const model of orModels) attempts.push({ provider: "openrouter", key: orKey, model });
+  }
+  return attempts;
 }
 
 function extractJson(raw: string): unknown {
@@ -37,95 +61,122 @@ function extractJson(raw: string): unknown {
   return JSON.parse(jsonSlice);
 }
 
-async function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function callModel(model: string, system: string, user: string, provider: { type: "groq" | "openrouter"; key: string }): Promise<string> {
-  const isOR = provider.type === "openrouter";
+async function callModel(attempt: Attempt, system: string, user: string, timeoutMs: number): Promise<string> {
+  const isOR = attempt.provider === "openrouter";
   const url = isOR ? "https://openrouter.ai/api/v1/chat/completions" : "https://api.groq.com/openai/v1/chat/completions";
-
-  let actualModel = model;
-  if (isOR) {
-    if (model === "llama-3.3-70b-versatile") actualModel = "meta-llama/llama-3.3-70b-instruct";
-    else if (model === "llama-3.1-8b-instant") actualModel = "meta-llama/llama-3.1-8b-instruct";
-  }
 
   const res = await fetch(url, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${provider.key}`,
+      Authorization: `Bearer ${attempt.key}`,
       "Content-Type": "application/json",
       ...(isOR ? { "HTTP-Referer": "https://sitescraper.vercel.app", "X-Title": "SiteElevate" } : {}),
     },
     body: JSON.stringify({
-      model: actualModel,
+      model: attempt.model,
       messages: [
-        { role: "system", content: system + "\n\nCRITICAL: You must output JSON matching this EXACT schema:\n" + JSON.stringify(AI_JSON_SCHEMA) },
+        { role: "system", content: `${system}\n\nCRITICAL: You must output JSON matching this EXACT schema:\n${JSON.stringify(AI_JSON_SCHEMA)}` },
         { role: "user", content: user },
       ],
       temperature: 0.7,
       response_format: { type: "json_object" },
     }),
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(timeoutMs),
   }).catch((err) => {
     if (err instanceof Error && (err.name === "TimeoutError" || err.message.includes("timeout"))) {
-      throw new OpenRouterError("The operation was aborted due to timeout", "upstream");
+      throw new OpenRouterError("The AI provider took too long to respond.", "upstream");
     }
-    throw new OpenRouterError(`Could not reach ${provider.type}.`, "upstream");
+    throw new OpenRouterError(`Could not reach ${attempt.provider}.`, "upstream");
   });
 
   if (!res.ok) {
     if (res.status === 429) throw new OpenRouterError("Rate limited by the AI provider.", "rate_limited");
     const body = await res.text().catch(() => "");
-    throw new OpenRouterError(`${provider.type} request failed (${res.status}): ${body.slice(0, 300)}`, "upstream");
+    throw new OpenRouterError(`${attempt.provider} request failed (${res.status}): ${body.slice(0, 300)}`, "upstream");
   }
 
   const json = await res.json();
   const content = json?.choices?.[0]?.message?.content;
   if (!content || typeof content !== "string") {
-    throw new OpenRouterError(`Empty response from ${provider.type} AI model.`, "upstream");
+    throw new OpenRouterError(`Empty response from ${attempt.provider}.`, "upstream");
   }
   return content;
 }
 
+const VISION_PROMPT = `You are a senior product designer reviewing a screenshot of a website's above-the-fold homepage. Describe concretely and critically what you SEE:
+- Layout structure and visual hierarchy (what draws the eye first, is there a clear focal point)
+- Typography (scale contrast, readability, font pairing quality)
+- Color palette and how professional/premium it feels
+- Whitespace and density (cramped vs breathing room)
+- Imagery/illustration quality (stock-photo feel vs custom)
+- CTA visibility and prominence
+- Any specific visual flaws (misalignment, low contrast, dated patterns, clutter)
+Return 8-12 short, specific bullet points. No preamble, no conclusion.`;
+
+/** Ask a vision model to describe the rendered page. Best-effort: any failure returns null. */
+async function describeScreenshot(dataUrl: string): Promise<string | null> {
+  const key = process.env.GROQ_API_KEY_2 || process.env.GROQ_API_KEY;
+  if (!key || !dataUrl) return null;
+  try {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: GROQ_VISION_MODEL,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: VISION_PROMPT },
+              { type: "image_url", image_url: { url: dataUrl } },
+            ],
+          },
+        ],
+        temperature: 0.4,
+        max_tokens: 700,
+      }),
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const content = json?.choices?.[0]?.message?.content;
+    return typeof content === "string" && content.trim() ? content.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function generateAudit(data: ScrapedPageData): Promise<AiAuditOutput> {
+  const visualAnalysis = await describeScreenshot(data.viewportScreenshot);
+  if (!visualAnalysis) console.warn("[ai] vision pass unavailable — audit will be text-grounded only");
+
   const system = buildSystemPrompt();
-  const user = buildUserPrompt(data);
-  const models = candidateModels();
+  const user = buildUserPrompt(data, visualAnalysis);
+  const attempts = buildAttempts();
+  if (attempts.length === 0) throw new OpenRouterError("No AI API keys are configured.", "missing_key");
 
-  const rawKeys = [
-    { type: "groq" as const, key: process.env.GROQ_API_KEY_2 },
-    { type: "groq" as const, key: process.env.GROQ_API_KEY },
-    { type: "openrouter" as const, key: process.env.OPENROUTER_API_KEY },
-  ];
-  const apiKeys = rawKeys.filter((k) => !!k.key) as { type: "groq" | "openrouter"; key: string }[];
-  if (apiKeys.length === 0) throw new OpenRouterError("No AI API keys are configured.", "missing_key");
-
+  const deadline = Date.now() + AI_BUDGET_MS;
   let lastError: unknown;
-  const maxRetries = 5;
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    for (const model of models) {
-      for (const provider of apiKeys) {
-        try {
-          const raw = await callModel(model, system, user, provider);
-          console.log(`[ai] Raw output from ${provider.type} using ${model}:\n`, raw);
-          const parsed = extractJson(raw);
-          const result = aiAuditSchema.safeParse(parsed);
-          if (result.success) return result.data;
-          console.warn(`[ai] ${model} validation error:`, result.error);
-          throw new OpenRouterError(`Model ${model} returned data that failed validation.`, "parse_failed");
-        } catch (err) {
-          lastError = err;
-          console.warn(`[ai] ${provider.type} with ${model} failed:`, err instanceof Error ? err.message : err);
-        }
-      }
+  for (const attempt of attempts) {
+    const remaining = deadline - Date.now();
+    if (remaining < 4_000) break; // not enough time left to reasonably try another call
+
+    const timeoutMs = Math.min(PER_CALL_TIMEOUT_MS, remaining);
+    try {
+      const raw = await callModel(attempt, system, user, timeoutMs);
+      const parsed = extractJson(raw);
+      const result = aiAuditSchema.safeParse(parsed);
+      if (result.success) return result.data;
+      if (process.env.DEBUG_AI) console.warn(`[ai] ${attempt.provider}/${attempt.model} validation error:`, result.error.message);
+      lastError = new OpenRouterError(`Model ${attempt.model} returned data that failed validation.`, "parse_failed");
+    } catch (err) {
+      lastError = err;
+      console.warn(`[ai] ${attempt.provider}/${attempt.model} failed:`, err instanceof Error ? err.message : err);
+      if (err instanceof OpenRouterError && err.code === "rate_limited") continue;
     }
-    console.warn(`[ai] All keys and models failed on attempt ${attempt}. Sleeping for 5s before retry...`);
-    if (attempt < maxRetries) await sleep(5000);
   }
 
   if (lastError instanceof Error) throw lastError;
-  throw new OpenRouterError("All AI models and keys failed after maximum retries.", "upstream");
+  throw new OpenRouterError("All AI models failed to produce a valid audit within the time budget.", "upstream");
 }

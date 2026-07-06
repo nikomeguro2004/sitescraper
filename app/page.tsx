@@ -41,7 +41,7 @@ export default function Home() {
   return (
     <div className="flex min-h-svh flex-col">
       <main className="flex flex-1 flex-col items-center px-4 py-10 sm:px-6">
-        <AnimatePresence mode="wait">
+        <AnimatePresence>
           {view === "idle" && (
             <motion.div
               key="idle"

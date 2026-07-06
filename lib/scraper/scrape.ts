@@ -1,6 +1,10 @@
+import type { BrowserContext } from "playwright-core";
 import { launchBrowser } from "@/lib/scraper/browser";
-import { extractPageData } from "@/lib/scraper/extract";
-import type { ScrapedPageData } from "@/lib/types/audit";
+import { extractPageData, extractSubPageData, discoverInternalLinks } from "@/lib/scraper/extract";
+import type { ScrapedPageData, SubPageData } from "@/lib/types/audit";
+
+const MAX_SUB_PAGES = 3;
+const SUB_PAGE_TIMEOUT_MS = 12_000;
 
 export class ScrapeError extends Error {
   constructor(
@@ -48,12 +52,17 @@ export async function scrapeWebsite(rawUrl: string): Promise<ScrapedPageData> {
     let response;
     try {
       response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "";
-      if (message.includes("timeout")) {
-        throw new ScrapeError("The website took too long to respond.", "timeout");
+    } catch (firstErr) {
+      // One retry — redirect chains and TLS handshakes are often transiently flaky.
+      try {
+        response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+      } catch {
+        const message = firstErr instanceof Error ? firstErr.message : "";
+        if (message.includes("timeout")) {
+          throw new ScrapeError("The website took too long to respond.", "timeout");
+        }
+        throw new ScrapeError("Couldn't reach that website. It may be down or blocking automated visits.", "blocked");
       }
-      throw new ScrapeError("Couldn't reach that website. It may be down or blocking automated visits.", "blocked");
     }
 
     if (!response) {
@@ -71,15 +80,45 @@ export async function scrapeWebsite(rawUrl: string): Promise<ScrapedPageData> {
     await page.waitForTimeout(1200).catch(() => {});
 
     const html = await page.content();
+    // Above-the-fold shot for the vision model (tall full-page images get downscaled to mush).
+    const viewportBuffer = await page.screenshot({ type: "jpeg", quality: 80, timeout: 10000 }).catch(() => null);
     const screenshotBuffer = await page.screenshot({ type: "jpeg", quality: 70, fullPage: true, timeout: 15000 }).catch(() =>
       page.screenshot({ type: "jpeg", quality: 70, timeout: 10000 }),
     );
     const screenshot = `data:image/jpeg;base64,${screenshotBuffer.toString("base64")}`;
 
     const data = extractPageData(html, url, page.url(), screenshot);
+    if (viewportBuffer) data.viewportScreenshot = `data:image/jpeg;base64,${viewportBuffer.toString("base64")}`;
+
+    const subPageUrls = discoverInternalLinks(html, page.url(), MAX_SUB_PAGES);
+    data.subPages = await crawlSubPages(context, subPageUrls);
+
     await context.close();
     return data;
   } finally {
     await browser.close().catch(() => {});
   }
+}
+
+/** Crawl sub-pages in parallel; failures are skipped, never fatal — the homepage audit still works. */
+async function crawlSubPages(context: BrowserContext, urls: string[]): Promise<SubPageData[]> {
+  const results = await Promise.all(
+    urls.map(async (subUrl) => {
+      try {
+        const page = await context.newPage();
+        try {
+          const res = await page.goto(subUrl, { waitUntil: "domcontentloaded", timeout: SUB_PAGE_TIMEOUT_MS });
+          if (!res || res.status() >= 400) return null;
+          await page.waitForTimeout(600).catch(() => {});
+          const html = await page.content();
+          return extractSubPageData(html, page.url());
+        } finally {
+          await page.close().catch(() => {});
+        }
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return results.filter((p): p is SubPageData => p !== null);
 }

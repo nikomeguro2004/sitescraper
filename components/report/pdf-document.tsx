@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, Image as PdfImage, StyleSheet, Font } from "@react-pdf/renderer";
+import { Document, Page, Text, View, StyleSheet, Font } from "@react-pdf/renderer";
 import type { AuditReport } from "@/lib/types/audit";
 import { SCORE_CATEGORIES, SCORE_CATEGORY_LABELS } from "@/lib/types/audit";
 import { deriveBusinessStatus } from "@/lib/utils/grade";

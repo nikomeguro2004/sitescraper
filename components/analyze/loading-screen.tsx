@@ -59,7 +59,7 @@ export function LoadingScreen({ stage, url }: { stage: StageIndex; url: string }
                   !done && !active && "border-border/40",
                 )}
               >
-                <AnimatePresence mode="wait" initial={false}>
+                <AnimatePresence initial={false}>
                   {done ? (
                     <motion.span key="check" initial={{ scale: 0 }} animate={{ scale: 1 }}>
                       <Check className="size-3.5" />
