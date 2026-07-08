@@ -56,12 +56,8 @@ export async function scrapeWebsite(rawUrl: string): Promise<ScrapedPageData> {
     });
 
     await context.route("**/*", (route) => {
-      const request = route.request();
-      const type = request.resourceType();
-      const url = request.url().toLowerCase();
+      const url = route.request().url().toLowerCase();
       if (
-        type === "media" || 
-        type === "font" ||
         url.includes("google-analytics.com") || 
         url.includes("doubleclick.net")
       ) {
@@ -75,7 +71,7 @@ export async function scrapeWebsite(rawUrl: string): Promise<ScrapedPageData> {
 
     let response;
     try {
-      response = await page.goto(url, { waitUntil: "networkidle", timeout: 20000 });
+      response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
     } catch (firstErr) {
       console.error("[Scrape Error] First attempt failed:", firstErr);
       // One retry — redirect chains and TLS handshakes are often transiently flaky.
