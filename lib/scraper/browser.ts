@@ -1,6 +1,5 @@
 import type { Browser } from "playwright-core";
 import { addExtra } from "playwright-extra";
-// @ts-ignore
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
 const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);

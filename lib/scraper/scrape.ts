@@ -46,8 +46,6 @@ export async function scrapeWebsite(rawUrl: string): Promise<ScrapedPageData> {
       viewport: { width: 1440, height: 900 },
       userAgent:
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
-      locale: "en-US",
-      timezoneId: "Asia/Kolkata",
       colorScheme: "light",
       javaScriptEnabled: true,
       ignoreHTTPSErrors: true,
@@ -56,11 +54,28 @@ export async function scrapeWebsite(rawUrl: string): Promise<ScrapedPageData> {
         "Upgrade-Insecure-Requests": "1",
       },
     });
+
+    await context.route("**/*", (route) => {
+      const request = route.request();
+      const type = request.resourceType();
+      const url = request.url().toLowerCase();
+      if (
+        type === "media" || 
+        type === "font" ||
+        url.includes("google-analytics.com") || 
+        url.includes("doubleclick.net")
+      ) {
+        route.abort().catch(() => {});
+      } else {
+        route.continue().catch(() => {});
+      }
+    });
+
     const page = await context.newPage();
 
     let response;
     try {
-      response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
+      response = await page.goto(url, { waitUntil: "networkidle", timeout: 20000 });
     } catch (firstErr) {
       console.error("[Scrape Error] First attempt failed:", firstErr);
       // One retry — redirect chains and TLS handshakes are often transiently flaky.
@@ -92,14 +107,53 @@ export async function scrapeWebsite(rawUrl: string): Promise<ScrapedPageData> {
 
     const title = await page.title();
     const html = await page.content();
+    const isCloudflare = await page.locator("#cf-please-wait, #challenge-running, .cf-turnstile").count() > 0;
 
     if (
       title.includes("Security") ||
+      title.includes("Just a moment...") ||
       html.includes("Security Checkpoint") ||
-      html.includes("__vercel")
+      html.includes("__vercel") ||
+      isCloudflare
     ) {
       throw new ScrapeError("Blocked by website protection.", "blocked");
     }
+
+    // Dismiss cookie banners and popups by hiding anything with very high z-index or common keywords
+    await page.evaluate(() => {
+      const keywords = ['cookie', 'accept', 'agree', 'got it', 'popup', 'newsletter'];
+      document.querySelectorAll('div, section, dialog').forEach((el) => {
+        const text = el.textContent?.toLowerCase() || '';
+        const zIndex = window.getComputedStyle(el).zIndex;
+        if (
+          (zIndex !== 'auto' && parseInt(zIndex) > 100 && keywords.some(k => text.includes(k))) ||
+          el.id.toLowerCase().includes('cookie') ||
+          el.className.toLowerCase().includes('cookie')
+        ) {
+          (el as HTMLElement).style.display = 'none';
+        }
+      });
+    }).catch(() => {});
+
+    // Scroll down and up for lazy loaded images
+    await page.evaluate(async () => {
+      await new Promise<void>((resolve) => {
+        let totalHeight = 0;
+        const distance = 500;
+        const timer = setInterval(() => {
+          window.scrollBy(0, distance);
+          totalHeight += distance;
+          if (totalHeight >= document.body.scrollHeight || totalHeight > 5000) {
+            clearInterval(timer);
+            window.scrollTo(0, 0); // scroll back up
+            resolve();
+          }
+        }, 100);
+      });
+    }).catch(() => {});
+
+    // Wait a brief moment for images to load after scroll
+    await page.waitForTimeout(1000).catch(() => {});
 
     // Above-the-fold shot for the vision model (tall full-page images get downscaled to mush).
     const viewportBuffer = await page.screenshot({ type: "jpeg", quality: 80, timeout: 10000 }).catch(() => null);
