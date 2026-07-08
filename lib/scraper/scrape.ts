@@ -53,10 +53,12 @@ export async function scrapeWebsite(rawUrl: string): Promise<ScrapedPageData> {
     try {
       response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
     } catch (firstErr) {
+      console.error("[Scrape Error] First attempt failed:", firstErr);
       // One retry — redirect chains and TLS handshakes are often transiently flaky.
       try {
         response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
-      } catch {
+      } catch (secondErr) {
+        console.error("[Scrape Error] Second attempt failed:", secondErr);
         const message = firstErr instanceof Error ? firstErr.message : "";
         if (message.includes("timeout")) {
           throw new ScrapeError("The website took too long to respond.", "timeout");
