@@ -45,7 +45,16 @@ export async function scrapeWebsite(rawUrl: string): Promise<ScrapedPageData> {
     const context = await browser.newContext({
       viewport: { width: 1440, height: 900 },
       userAgent:
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 SiteElevateBot/1.0",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+      locale: "en-US",
+      timezoneId: "Asia/Kolkata",
+      colorScheme: "light",
+      javaScriptEnabled: true,
+      ignoreHTTPSErrors: true,
+      extraHTTPHeaders: {
+        "Accept-Language": "en-US,en;q=0.9",
+        "Upgrade-Insecure-Requests": "1",
+      },
     });
     const page = await context.newPage();
 
@@ -81,7 +90,17 @@ export async function scrapeWebsite(rawUrl: string): Promise<ScrapedPageData> {
 
     await page.waitForTimeout(1200).catch(() => {});
 
+    const title = await page.title();
     const html = await page.content();
+
+    if (
+      title.includes("Security") ||
+      html.includes("Security Checkpoint") ||
+      html.includes("__vercel")
+    ) {
+      throw new ScrapeError("Blocked by website protection.", "blocked");
+    }
+
     // Above-the-fold shot for the vision model (tall full-page images get downscaled to mush).
     const viewportBuffer = await page.screenshot({ type: "jpeg", quality: 80, timeout: 10000 }).catch(() => null);
     const screenshotBuffer = await page.screenshot({ type: "jpeg", quality: 70, fullPage: true, timeout: 15000 }).catch(() =>
