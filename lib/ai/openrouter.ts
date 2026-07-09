@@ -114,9 +114,9 @@ const VISION_PROMPT = `You are a senior product designer reviewing a screenshot 
 Return 8-12 short, specific bullet points. No preamble, no conclusion.`;
 
 /** Ask a vision model to describe the rendered page. Best-effort: any failure returns null. */
-async function describeScreenshot(dataUrl: string): Promise<string | null> {
+async function describeScreenshot(dataUrl: string, timeoutMs: number): Promise<string | null> {
   const key = process.env.GROQ_API_KEY_2 || process.env.GROQ_API_KEY;
-  if (!key || !dataUrl) return null;
+  if (!key || !dataUrl || timeoutMs < 2_000) return null;
   try {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -135,7 +135,7 @@ async function describeScreenshot(dataUrl: string): Promise<string | null> {
         temperature: 0.4,
         max_tokens: 700,
       }),
-      signal: AbortSignal.timeout(12_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) return null;
     const json = await res.json();
@@ -146,8 +146,16 @@ async function describeScreenshot(dataUrl: string): Promise<string | null> {
   }
 }
 
-export async function generateAudit(data: ScrapedPageData): Promise<AiAuditOutput> {
-  const visualAnalysis = await describeScreenshot(data.viewportScreenshot);
+/**
+ * @param deadlineAt Absolute Date.now()-style timestamp the whole request must
+ * finish by (scrape + AI share this budget). Falls back to a fixed 40s
+ * budget from now if not provided, e.g. when calling this standalone.
+ */
+export async function generateAudit(data: ScrapedPageData, deadlineAt?: number): Promise<AiAuditOutput> {
+  const deadline = deadlineAt ? Math.min(deadlineAt, Date.now() + AI_BUDGET_MS) : Date.now() + AI_BUDGET_MS;
+
+  const visionTimeout = Math.min(12_000, deadline - Date.now() - 2_000);
+  const visualAnalysis = await describeScreenshot(data.viewportScreenshot, visionTimeout);
   if (!visualAnalysis) console.warn("[ai] vision pass unavailable — audit will be text-grounded only");
 
   const system = buildSystemPrompt();
@@ -155,7 +163,6 @@ export async function generateAudit(data: ScrapedPageData): Promise<AiAuditOutpu
   const attempts = buildAttempts();
   if (attempts.length === 0) throw new OpenRouterError("No AI API keys are configured.", "missing_key");
 
-  const deadline = Date.now() + AI_BUDGET_MS;
   let lastError: unknown;
 
   for (const attempt of attempts) {

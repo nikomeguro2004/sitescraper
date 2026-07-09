@@ -1,10 +1,14 @@
 import type { BrowserContext } from "playwright-core";
 import { launchBrowser } from "@/lib/scraper/browser";
+import { applyStealth } from "@/lib/scraper/stealth";
 import { extractPageData, extractSubPageData, discoverInternalLinks } from "@/lib/scraper/extract";
 import type { ScrapedPageData, SubPageData } from "@/lib/types/audit";
 
 const MAX_SUB_PAGES = 3;
-const SUB_PAGE_TIMEOUT_MS = 12_000;
+const SUB_PAGE_TIMEOUT_MS = 10_000;
+// Below this much remaining budget, skip the sub-page crawl entirely —
+// better to return a homepage-only audit than blow the route's deadline.
+const MIN_BUDGET_FOR_SUBPAGES_MS = 10_000;
 
 export class ScrapeError extends Error {
   constructor(
@@ -30,8 +34,13 @@ export function normalizeUrl(input: string): string {
   }
 }
 
-export async function scrapeWebsite(rawUrl: string): Promise<ScrapedPageData> {
+/**
+ * @param deadlineAt Absolute Date.now()-style timestamp the scrape should
+ * finish by. Falls back to a fixed 25s budget if not provided.
+ */
+export async function scrapeWebsite(rawUrl: string, deadlineAt?: number): Promise<ScrapedPageData> {
   const url = normalizeUrl(rawUrl);
+  const deadline = deadlineAt ?? Date.now() + 25_000;
   let browser;
 
   try {
@@ -45,17 +54,18 @@ export async function scrapeWebsite(rawUrl: string): Promise<ScrapedPageData> {
     const context = await browser.newContext({
       viewport: { width: 1440, height: 900 },
       userAgent:
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 SiteElevateBot/1.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
     });
+    await applyStealth(context);
     const page = await context.newPage();
 
     let response;
     try {
-      response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
+      response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
     } catch (firstErr) {
       // One retry — redirect chains and TLS handshakes are often transiently flaky.
       try {
-        response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+        response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 10000 });
       } catch {
         const message = firstErr instanceof Error ? firstErr.message : "";
         if (message.includes("timeout")) {
@@ -77,21 +87,33 @@ export async function scrapeWebsite(rawUrl: string): Promise<ScrapedPageData> {
       throw new ScrapeError("The website is currently returning server errors.", "blocked");
     }
 
-    await page.waitForTimeout(1200).catch(() => {});
+    await page.waitForTimeout(800).catch(() => {});
 
     const html = await page.content();
-    // Above-the-fold shot for the vision model (tall full-page images get downscaled to mush).
-    const viewportBuffer = await page.screenshot({ type: "jpeg", quality: 80, timeout: 10000 }).catch(() => null);
-    const screenshotBuffer = await page.screenshot({ type: "jpeg", quality: 70, fullPage: true, timeout: 15000 }).catch(() =>
-      page.screenshot({ type: "jpeg", quality: 70, timeout: 10000 }),
-    );
-    const screenshot = `data:image/jpeg;base64,${screenshotBuffer.toString("base64")}`;
+
+    // Single viewport screenshot first (fast, always attempted) — this is
+    // what the vision pass and, if the full-page shot fails, the report
+    // header both fall back to. A failed screenshot must never fail the
+    // whole audit; serverless cold starts occasionally drop the page mid-shot.
+    const viewportBuffer = await page.screenshot({ type: "jpeg", quality: 80, timeout: 8000 }).catch(() => null);
+
+    let fullPageBuffer: Buffer | null = null;
+    if (deadline - Date.now() > 6_000) {
+      fullPageBuffer = await page
+        .screenshot({ type: "jpeg", quality: 65, fullPage: true, timeout: 8000 })
+        .catch(() => null);
+    }
+
+    const primaryBuffer = fullPageBuffer ?? viewportBuffer;
+    const screenshot = primaryBuffer ? `data:image/jpeg;base64,${primaryBuffer.toString("base64")}` : "";
 
     const data = extractPageData(html, url, page.url(), screenshot);
     if (viewportBuffer) data.viewportScreenshot = `data:image/jpeg;base64,${viewportBuffer.toString("base64")}`;
 
-    const subPageUrls = discoverInternalLinks(html, page.url(), MAX_SUB_PAGES);
-    data.subPages = await crawlSubPages(context, subPageUrls);
+    if (deadline - Date.now() > MIN_BUDGET_FOR_SUBPAGES_MS) {
+      const subPageUrls = discoverInternalLinks(html, page.url(), MAX_SUB_PAGES);
+      data.subPages = await crawlSubPages(context, subPageUrls, deadline);
+    }
 
     await context.close();
     return data;
@@ -101,15 +123,16 @@ export async function scrapeWebsite(rawUrl: string): Promise<ScrapedPageData> {
 }
 
 /** Crawl sub-pages in parallel; failures are skipped, never fatal — the homepage audit still works. */
-async function crawlSubPages(context: BrowserContext, urls: string[]): Promise<SubPageData[]> {
+async function crawlSubPages(context: BrowserContext, urls: string[], deadline: number): Promise<SubPageData[]> {
+  const timeoutMs = Math.min(SUB_PAGE_TIMEOUT_MS, Math.max(3_000, deadline - Date.now() - 1_500));
   const results = await Promise.all(
     urls.map(async (subUrl) => {
       try {
         const page = await context.newPage();
         try {
-          const res = await page.goto(subUrl, { waitUntil: "domcontentloaded", timeout: SUB_PAGE_TIMEOUT_MS });
+          const res = await page.goto(subUrl, { waitUntil: "domcontentloaded", timeout: timeoutMs });
           if (!res || res.status() >= 400) return null;
-          await page.waitForTimeout(600).catch(() => {});
+          await page.waitForTimeout(400).catch(() => {});
           const html = await page.content();
           return extractSubPageData(html, page.url());
         } finally {

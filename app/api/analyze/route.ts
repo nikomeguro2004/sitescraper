@@ -7,6 +7,16 @@ import { SCORE_CATEGORIES, type AnalyzeStreamEvent, type AuditReport, type Stage
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+// Overall wall-clock budget for the whole request (scrape + AI), kept safely
+// under maxDuration so we can still emit a clean SSE error instead of the
+// serverless function being killed mid-stream on a cold start.
+const REQUEST_BUDGET_MS = 50_000;
+
+// 1x1 neutral gray pixel — used when both screenshot attempts fail so the
+// report UI never has to special-case an empty image src.
+const PLACEHOLDER_SCREENSHOT =
+  "data:image/gif;base64,R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==";
+
 const subPageSchema = z.object({
   url: z.string(),
   path: z.string(),
@@ -82,6 +92,8 @@ export async function POST(req: NextRequest) {
   }
   const { url, scrapedData } = parsed.data;
 
+  const deadlineAt = Date.now() + REQUEST_BUDGET_MS;
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const encoder = new TextEncoder();
@@ -94,18 +106,18 @@ export async function POST(req: NextRequest) {
         if (!scraped) {
           stage(0);
           stage(1);
-          scraped = await scrapeWebsite(url);
+          scraped = await scrapeWebsite(url, deadlineAt);
           emit({ type: "scraped", data: scraped });
         } else {
           stage(0);
           stage(1);
           // Just a small delay so UI isn't instantaneous if we skip scraping
-          await new Promise(r => setTimeout(r, 500)); 
+          await new Promise(r => setTimeout(r, 500));
         }
 
         stage(2);
 
-        const aiPromise = generateAudit(scraped);
+        const aiPromise = generateAudit(scraped, deadlineAt);
         await raceStagesWithWork([3, 4, 5, 6], 1400, stage, aiPromise);
         const aiResult = await aiPromise;
 
@@ -126,7 +138,7 @@ export async function POST(req: NextRequest) {
           id: crypto.randomUUID(),
           url: scraped.finalUrl,
           websiteName: aiResult.websiteName,
-          screenshot: scraped.screenshot,
+          screenshot: scraped.screenshot || PLACEHOLDER_SCREENSHOT,
           themeColor: scraped.themeColor,
           createdAt: new Date().toISOString(),
           overallScore,
