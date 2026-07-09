@@ -5,8 +5,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/**/*": [
       "node_modules/playwright-core/browsers.json",
-      "node_modules/@sparticuz/chromium/bin/**/*",
-      "lib/scraper/stealth.min.js"
+      "node_modules/@sparticuz/chromium/bin/**/*"
     ],
   },
 };
