@@ -4,11 +4,11 @@ import { applyStealth } from "@/lib/scraper/stealth";
 import { extractPageData, extractSubPageData, discoverInternalLinks } from "@/lib/scraper/extract";
 import type { ScrapedPageData, SubPageData } from "@/lib/types/audit";
 
-const MAX_SUB_PAGES = 3;
-const SUB_PAGE_TIMEOUT_MS = 10_000;
+const MAX_SUB_PAGES = 2;
+const SUB_PAGE_TIMEOUT_MS = 8_000;
 // Below this much remaining budget, skip the sub-page crawl entirely —
 // better to return a homepage-only audit than blow the route's deadline.
-const MIN_BUDGET_FOR_SUBPAGES_MS = 10_000;
+const MIN_BUDGET_FOR_SUBPAGES_MS = 8_000;
 
 export class ScrapeError extends Error {
   constructor(
@@ -59,13 +59,23 @@ export async function scrapeWebsite(rawUrl: string, deadlineAt?: number): Promis
     await applyStealth(context);
     const page = await context.newPage();
 
+    // Navigation timeout shrinks with whatever's left of the scrape budget
+    // (cold-start browser launches can already eat a big chunk of it), but
+    // never drops below a floor where a fast site still has a fair shot.
+    const navTimeout = Math.max(5_000, Math.min(15_000, deadline - Date.now() - 4_000));
+
     let response;
     try {
-      response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+      response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: navTimeout });
     } catch (firstErr) {
-      // One retry — redirect chains and TLS handshakes are often transiently flaky.
+      const retryTimeout = deadline - Date.now() - 2_000;
+      // One retry — redirect chains and TLS handshakes are often transiently
+      // flaky — but only if there's meaningfully more time to try it in.
+      if (retryTimeout < 4_000) {
+        throw new ScrapeError("The website took too long to respond.", "timeout");
+      }
       try {
-        response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 10000 });
+        response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: retryTimeout });
       } catch {
         const message = firstErr instanceof Error ? firstErr.message : "";
         if (message.includes("timeout")) {
@@ -95,12 +105,13 @@ export async function scrapeWebsite(rawUrl: string, deadlineAt?: number): Promis
     // what the vision pass and, if the full-page shot fails, the report
     // header both fall back to. A failed screenshot must never fail the
     // whole audit; serverless cold starts occasionally drop the page mid-shot.
-    const viewportBuffer = await page.screenshot({ type: "jpeg", quality: 80, timeout: 8000 }).catch(() => null);
+    const viewportTimeout = Math.max(3_000, Math.min(8_000, deadline - Date.now() - 2_000));
+    const viewportBuffer = await page.screenshot({ type: "jpeg", quality: 80, timeout: viewportTimeout }).catch(() => null);
 
     let fullPageBuffer: Buffer | null = null;
     if (deadline - Date.now() > 6_000) {
       fullPageBuffer = await page
-        .screenshot({ type: "jpeg", quality: 65, fullPage: true, timeout: 8000 })
+        .screenshot({ type: "jpeg", quality: 65, fullPage: true, timeout: Math.min(8_000, deadline - Date.now() - 2_000) })
         .catch(() => null);
     }
 

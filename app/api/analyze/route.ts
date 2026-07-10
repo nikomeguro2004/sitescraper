@@ -12,6 +12,12 @@ export const maxDuration = 60;
 // serverless function being killed mid-stream on a cold start.
 const REQUEST_BUDGET_MS = 50_000;
 
+// Scraping gets its own hard sub-ceiling, well short of the overall budget.
+// Without this, a slow cold-start scrape (Chromium boot alone can take
+// 10-20s on serverless) can consume the entire request budget and leave the
+// AI stage with ~0 time — which is exactly what production was doing.
+const SCRAPE_BUDGET_MS = 26_000;
+
 // 1x1 neutral gray pixel — used when both screenshot attempts fail so the
 // report UI never has to special-case an empty image src.
 const PLACEHOLDER_SCREENSHOT =
@@ -92,7 +98,9 @@ export async function POST(req: NextRequest) {
   }
   const { url, scrapedData } = parsed.data;
 
-  const deadlineAt = Date.now() + REQUEST_BUDGET_MS;
+  const requestStart = Date.now();
+  const deadlineAt = requestStart + REQUEST_BUDGET_MS;
+  const scrapeDeadlineAt = Math.min(deadlineAt, requestStart + SCRAPE_BUDGET_MS);
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -106,7 +114,7 @@ export async function POST(req: NextRequest) {
         if (!scraped) {
           stage(0);
           stage(1);
-          scraped = await scrapeWebsite(url, deadlineAt);
+          scraped = await scrapeWebsite(url, scrapeDeadlineAt);
           emit({ type: "scraped", data: scraped });
         } else {
           stage(0);
