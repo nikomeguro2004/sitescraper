@@ -1,12 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["playwright-core", "playwright", "@sparticuz/chromium", "playwright-extra", "puppeteer-extra-plugin-stealth"],
+  serverExternalPackages: ["playwright-core", "playwright", "@sparticuz/chromium"],
   outputFileTracingIncludes: {
     "/api/**/*": [
       "node_modules/playwright-core/browsers.json",
-      "node_modules/@sparticuz/chromium/bin/**/*",
-      "node_modules/puppeteer-extra-plugin-stealth/**/*"
+      "node_modules/@sparticuz/chromium/bin/**/*"
     ],
   },
 };
