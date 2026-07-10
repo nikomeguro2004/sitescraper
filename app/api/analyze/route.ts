@@ -7,16 +7,22 @@ import { SCORE_CATEGORIES, type AnalyzeStreamEvent, type AuditReport, type Stage
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// Overall wall-clock budget for the whole request (scrape + AI), kept safely
-// under maxDuration so we can still emit a clean SSE error instead of the
-// serverless function being killed mid-stream on a cold start.
-const REQUEST_BUDGET_MS = 50_000;
+// True hard ceiling for the whole request, safety-margined under Vercel's
+// maxDuration (60s) so we can still emit a clean SSE error instead of the
+// function being killed mid-stream.
+const HARD_CEILING_MS = 57_000;
 
-// Scraping gets its own hard sub-ceiling, well short of the overall budget.
-// Without this, a slow cold-start scrape (Chromium boot alone can take
-// 10-20s on serverless) can consume the entire request budget and leave the
-// AI stage with ~0 time — which is exactly what production was doing.
+// Scraping gets its own hard sub-ceiling. Without this, a slow cold-start
+// scrape (Chromium boot alone can take 10-20s on serverless) can consume
+// most of the request and leave the AI stage starved.
 const SCRAPE_BUDGET_MS = 26_000;
+
+// The AI stage gets this much time *after scraping finishes*, regardless of
+// how long scraping took — it is NOT carved out of a single shared deadline.
+// A slow scrape must not be allowed to starve the AI call down to a timeout
+// that can never succeed; the only thing that can shrink this floor is the
+// overall hard ceiling itself.
+const AI_MIN_BUDGET_MS = 24_000;
 
 // 1x1 neutral gray pixel — used when both screenshot attempts fail so the
 // report UI never has to special-case an empty image src.
@@ -99,8 +105,8 @@ export async function POST(req: NextRequest) {
   const { url, scrapedData } = parsed.data;
 
   const requestStart = Date.now();
-  const deadlineAt = requestStart + REQUEST_BUDGET_MS;
-  const scrapeDeadlineAt = Math.min(deadlineAt, requestStart + SCRAPE_BUDGET_MS);
+  const hardDeadlineAt = requestStart + HARD_CEILING_MS;
+  const scrapeDeadlineAt = Math.min(hardDeadlineAt, requestStart + SCRAPE_BUDGET_MS);
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -125,7 +131,10 @@ export async function POST(req: NextRequest) {
 
         stage(2);
 
-        const aiPromise = generateAudit(scraped, deadlineAt);
+        // AI gets a full budget measured from *now* (post-scrape), clamped
+        // only by the overall hard ceiling — a slow scrape can't starve it.
+        const aiDeadlineAt = Math.min(hardDeadlineAt, Date.now() + AI_MIN_BUDGET_MS);
+        const aiPromise = generateAudit(scraped, aiDeadlineAt);
         await raceStagesWithWork([3, 4, 5, 6], 1400, stage, aiPromise);
         const aiResult = await aiPromise;
 

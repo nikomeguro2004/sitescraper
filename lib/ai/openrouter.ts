@@ -154,7 +154,9 @@ async function describeScreenshot(dataUrl: string, timeoutMs: number): Promise<s
 export async function generateAudit(data: ScrapedPageData, deadlineAt?: number): Promise<AiAuditOutput> {
   const deadline = deadlineAt ? Math.min(deadlineAt, Date.now() + AI_BUDGET_MS) : Date.now() + AI_BUDGET_MS;
 
-  const visionTimeout = Math.min(12_000, deadline - Date.now() - 2_000);
+  // Vision is a nice-to-have — cap it so the main audit call always keeps
+  // the lion's share of the AI budget even when vision is slow.
+  const visionTimeout = Math.min(8_000, deadline - Date.now() - 12_000);
   const visualAnalysis = await describeScreenshot(data.viewportScreenshot, visionTimeout);
   if (!visualAnalysis) console.warn("[ai] vision pass unavailable — audit will be text-grounded only");
 
