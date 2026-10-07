@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
             title: "Business Walk Premium Digital Product",
             metaDescription: "A world-class digital experience engineered for growth.",
             siteName: "Business Walk Project",
-            screenshot: "", 
+            screenshot: `https://image.thum.io/get/width/1200/crop/800/${url}`, 
             themeColor: "#111111",
             headings: [],
             navLinks: [],
@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
             techStack: ["Next.js", "Vercel"],
             subPages: [],
             signals: { emails: [], phones: [], socialLinks: [], hasPrivacyPolicy: true, hasTermsOfService: true, copyrightYear: "2026", hasFavicon: true, hasOgImage: true, hasCanonical: true, hasViewportMeta: true, titleLength: 50, metaDescriptionLength: 100, h1Count: 1, imgCount: 10, imgMissingAlt: 0, complianceMentions: [] },
-            viewportScreenshot: ""
+            viewportScreenshot: `https://image.thum.io/get/width/1200/crop/800/${url}`
           };
           emit({ type: "scraped", data: scraped });
         } else if (!scraped) {
