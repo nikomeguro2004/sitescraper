@@ -131,12 +131,47 @@ export async function POST(req: NextRequest) {
 
         stage(2);
 
-        // AI gets a full budget measured from *now* (post-scrape), clamped
-        // only by the overall hard ceiling — a slow scrape can't starve it.
-        const aiDeadlineAt = Math.min(hardDeadlineAt, Date.now() + AI_MIN_BUDGET_MS);
-        const aiPromise = generateAudit(scraped, aiDeadlineAt);
-        await raceStagesWithWork([3, 4, 5, 6], 1400, stage, aiPromise);
-        const aiResult = await aiPromise;
+        // Check if URL is in Business Walk portfolio
+        const portfolioDomains = [
+          "salon149.vercel.app",
+          "vasusinfinitymart.online",
+          "bluelagoon-six.vercel.app",
+          "srinivasacarcare.com",
+          "ganesan-decorators.vercel.app",
+          "rr-beryl-mu.vercel.app",
+          "businesswalk.in",
+          "console.businesswalk.in",
+          "consolebw.vercel.app",
+          "console.vercel.app",
+          "bwdash.businesswalk.in",
+          "bwdash.vercel.app",
+          "bwos-two.vercel.app"
+        ];
+        
+        let aiResult;
+        const isPortfolio = portfolioDomains.some(d => scraped.finalUrl.includes(d) || url.includes(d));
+        
+        if (isPortfolio) {
+          await raceStagesWithWork([3, 4, 5, 6], 500, stage, Promise.resolve());
+          aiResult = {
+            websiteName: scraped.siteName || "Business Walk Project",
+            projectedImprovedScore: 9.8,
+            trustCredibility: { score: 9.5, businessStatus: "Excellent" as const, points: ["High professional branding", "Strong trust signals"], conclusion: "Exceptional trust credibility." },
+            salesConversionReadiness: { score: 9.6, businessStatus: "Excellent" as const, points: ["Clear CTAs", "Optimized funnels"], conclusion: "Highly optimized conversion flow." },
+            enterpriseReadiness: { score: 9.2, businessStatus: "Excellent" as const, points: ["Robust performance", "Scalable design"], conclusion: "Enterprise-grade architecture." },
+            visualBranding: { score: 9.8, businessStatus: "Excellent" as const, points: ["Stunning high-end aesthetic", "Cohesive design system"], conclusion: "Premium visual branding." },
+            visualStorytelling: { score: 9.5, businessStatus: "Excellent" as const, points: ["Compelling narrative", "Strong imagery"], conclusion: "Great narrative flow." },
+            brandDifferentiation: { score: 9.4, businessStatus: "Excellent" as const, points: ["Unique premium feel", "Stands out from competitors"], conclusion: "Distinctly positioned." },
+            businessValueCommunication: { score: 9.6, businessStatus: "Excellent" as const, points: ["Clear value proposition", "Immediate impact"], conclusion: "Strong value communication." },
+            whatWeDo: { problems: ["Outdated digital presence", "Low conversion rates"], solutions: ["Premium digital experience", "High-performance platform"] },
+            businessConclusion: { points: ["World-class design", "Benchmark performance"], currentPositioning: "Industry leader", premiumFuturePositioning: "Continued digital dominance" }
+          };
+        } else {
+          const aiDeadlineAt = Math.min(hardDeadlineAt, Date.now() + AI_MIN_BUDGET_MS);
+          const aiPromise = generateAudit(scraped, aiDeadlineAt);
+          await raceStagesWithWork([3, 4, 5, 6], 1400, stage, aiPromise);
+          aiResult = await aiPromise;
+        }
 
         stage(7);
 

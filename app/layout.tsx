@@ -1,22 +1,22 @@
 import type { Metadata } from "next";
-import { Inter, Outfit } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 
-const fontSans = Inter({
-  variable: "--font-sans",
+const geistSans = Geist({
+  variable: "--font-geist-sans",
   subsets: ["latin"],
 });
 
-const fontHeading = Outfit({
-  variable: "--font-heading",
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "SiteElevate — Website Audit & Optimization",
-  description: "Expert analysis of your website's design, branding, trust, and conversion performance.",
+  title: "Business Walk | Website Audit",
+  description: "Get a world-class audit of your website's design and conversion performance.",
 };
 
 export default function RootLayout({
@@ -27,7 +27,7 @@ export default function RootLayout({
   return (
       <html
         lang="en"
-        className={`${fontSans.variable} ${fontHeading.variable} h-full antialiased light`}
+        className={`${geistSans.variable} ${geistMono.variable} h-full antialiased light`}
       >
         <body className="min-h-full flex flex-col font-sans">
           <TooltipProvider delay={200}>
