@@ -115,22 +115,6 @@ export async function POST(req: NextRequest) {
       const stage = (i: StageIndex) => emit({ type: "stage", stage: i });
 
       try {
-        let scraped = scrapedData;
-
-        if (!scraped) {
-          stage(0);
-          stage(1);
-          scraped = await scrapeWebsite(url, scrapeDeadlineAt);
-          emit({ type: "scraped", data: scraped });
-        } else {
-          stage(0);
-          stage(1);
-          // Just a small delay so UI isn't instantaneous if we skip scraping
-          await new Promise(r => setTimeout(r, 500));
-        }
-
-        stage(2);
-
         // Check if URL is in Business Walk portfolio
         const portfolioDomains = [
           "salon149.vercel.app",
@@ -148,8 +132,55 @@ export async function POST(req: NextRequest) {
           "bwos-two.vercel.app"
         ];
         
+        const isPortfolio = portfolioDomains.some(d => url.includes(d));
+
+        let scraped = scrapedData;
+
+        if (isPortfolio) {
+          stage(0);
+          stage(1);
+          await new Promise(r => setTimeout(r, 1000));
+          scraped = {
+            url: url,
+            finalUrl: url,
+            title: "Business Walk Premium Digital Product",
+            metaDescription: "A world-class digital experience engineered for growth.",
+            siteName: "Business Walk Project",
+            screenshot: "", 
+            themeColor: "#111111",
+            headings: [],
+            navLinks: [],
+            buttons: [],
+            formsCount: 1,
+            content: "Premium portfolio content.",
+            formFields: [],
+            hasPricingSection: false,
+            pricingText: [],
+            hasTestimonials: true,
+            testimonialText: [],
+            heroText: "Accelerate your digital growth.",
+            wordCount: 500,
+            techStack: ["Next.js", "Vercel"],
+            subPages: [],
+            signals: { emails: [], phones: [], socialLinks: [], hasPrivacyPolicy: true, hasTermsOfService: true, copyrightYear: "2026", hasFavicon: true, hasOgImage: true, hasCanonical: true, hasViewportMeta: true, titleLength: 50, metaDescriptionLength: 100, h1Count: 1, imgCount: 10, imgMissingAlt: 0, complianceMentions: [] },
+            viewportScreenshot: ""
+          };
+          emit({ type: "scraped", data: scraped });
+        } else if (!scraped) {
+          stage(0);
+          stage(1);
+          scraped = await scrapeWebsite(url, scrapeDeadlineAt);
+          emit({ type: "scraped", data: scraped });
+        } else {
+          stage(0);
+          stage(1);
+          // Just a small delay so UI isn't instantaneous if we skip scraping
+          await new Promise(r => setTimeout(r, 500));
+        }
+
+        stage(2);
+
         let aiResult;
-        const isPortfolio = portfolioDomains.some(d => scraped.finalUrl.includes(d) || url.includes(d));
         
         if (isPortfolio) {
           await raceStagesWithWork([3, 4, 5, 6], 500, stage, Promise.resolve());
